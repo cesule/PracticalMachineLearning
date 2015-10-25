@@ -1,0 +1,125 @@
+---
+title: "Practical Machine Learning Course Project"
+output: html_document
+---
+
+In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. This is the "classe" variable in the training set. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+This report describes how I built and chose my prediction model to predict the manner in which they did the exercise, and how I used cross validation to estimate the out of sample error. I also used my prediction model to predict 20 different test cases.
+
+### Basic Data Preprocessing
+
+The data is loaded into R after setting working directory with setwd() same as the directory of the data. 
+
+```{r, warning=FALSE, message=FALSE}
+# Set seed and load necessary packages
+set.seed(12345)
+library(caret); library(rpart); library(randomForest)
+```
+
+```{r}
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+dim(training); dim(testing)
+head(training[1,159:160]); head(testing[1,159:160])
+```
+
+Both data sets contain 160 variables. The outcome variable "classe" is included only in the training data set. The variable "problem_id" is included instead in the testing data set. The outcome variable "classe" indicates the manner in which the exercise was executed. Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes:
+
+* A: exactly according to the specification
+* B: throwing the elbows to the front
+* C: lifting the dumbbell only halfway
+* D: lowering the dumbbell only halfway
+* E: throwing the hips to the front
+
+```{r}
+head(training[1,1:5]); head(testing[1,1:5])
+```
+
+The first 5 variables are identifiers and time variables, hence they are excluded from both data sets.
+
+```{r}
+training <- training[,6:dim(training)[2]]
+testing <- testing[,6:dim(testing)[2]]
+```
+
+The "near zero variance" predictors are identified using the nearZeroVar function and eliminated prior to modeling.
+
+```{r}
+nzv <- nearZeroVar(training)
+training <- training[, -nzv]; testing <- testing[, -nzv]
+dim(training); dim(testing)
+```
+
+The variables with a lot of NA's are also eliminated. The final data sets include 53 predictors.
+
+```{r}
+trainingNA <- apply(training, 2, function(x) sum(is.na(x)))
+training <- training[, which(trainingNA==0)]
+testingNA <- apply(testing, 2, function(x) sum(is.na(x)))
+testing <- testing[, which(testingNA==0)]
+dim(training); dim(testing)
+```
+
+To perform cross validation, the data is partitioned into two subsets. 75% of data in training set is assigned to "subTrain" data set and remaining 25% to "subTest" data set.
+
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+subTrain <- training[inTrain,]
+subTest <- training[-inTrain,]
+dim(subTrain); dim(subTest)
+```
+ 
+### Prediction Models and Cross Validation
+
+Two learning algorithms, classification tree and random forest, are applied to the subTrain data set.
+
+##### Classification Tree
+
+```{r}
+modFit1 <- train(classe~., method="rpart", data=subTrain) # training
+pred1 <- predict(modFit1, subTest) # prediction 
+cM1 <- confusionMatrix(pred1, subTest$classe); 
+cM1
+```
+
+##### Random Forest
+
+```{r}
+modFit2 <- train(classe~., method="rf", data=subTrain) # training
+pred2 <- predict(modFit2, subTest) # prediction 
+cM2 <- confusionMatrix(pred2, subTest$classe)
+cM2
+```
+
+##### Accuracy and Out-of-sample Error
+
+The confusion Matrix for the first method shows that a lot of points are missclassified and hence accuracy is low. The second method predicts much better than the first one with a much higher accuracy. The out-of-sample errors are estimated with (1 - Accuracy). The table below summarizes the accuracy and the out-of-sample error of two models. First row is the classification tree model, and the second row is the selected model (random forest).
+
+```{r}
+Table <- data.frame(c(cM1$overall[1], cM2$overall[1]), c(1-cM1$overall[1], 1-cM2$overall[1]))
+colnames(Table) <- c("Accuracy", "Out-of-sample Error")
+Table
+```
+
+### Prediction on Testing Data and Submission
+
+```{r}
+preds <- predict(modFit2, testing)
+preds
+
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_id_",i,".txt")
+                write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+}
+
+pml_write_files(preds)
+```
+
+### References
+
+* http://groupware.les.inf.puc-rio.br/har
+* Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
