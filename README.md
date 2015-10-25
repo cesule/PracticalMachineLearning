@@ -15,4 +15,5 @@ This repo includes the following files:
 
 Note: 
 ======
-The HTML page with the analysis can be viewed online using:
+The HTML page with the analysis can be read online at the link:
+http://cesule.github.io/PracticalMachineLearning/Project.html
